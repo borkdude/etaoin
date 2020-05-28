@@ -1,7 +1,7 @@
 (ns etaoin.client
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log]
-            [clj-http.client :as client]
+            [clj-http.lite.client :as client]
             [cheshire.core :refer [parse-string]]
             [slingshot.slingshot :refer [throw+]]))
 

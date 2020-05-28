@@ -1,6 +1,6 @@
 (def VERSION (.trim (slurp "VERSION")))
 
-(defproject etaoin VERSION
+(defproject borkdude/etaoin-graal VERSION
 
   :description "Pure Clojure Webdriver protocol implementation."
 
@@ -23,7 +23,7 @@
              :1.9 {:dependencies [[org.clojure/clojure "1.9.0"]]}}
                                   ;[nrepl "0.6.0"]]}}
 
-  :dependencies [[clj-http "2.3.0"]
+  :dependencies [[org.martinklepsch/clj-http-lite "0.4.3"]
                  [cheshire "5.6.3"]
                  [org.clojure/tools.logging "0.3.1"]
                  [org.clojure/data.codec "0.1.0"]]
@@ -36,4 +36,9 @@
   :plugins [[test2junit "1.1.2"]]
   :test2junit-output-dir "target/test2junit"
 
-  :codox {:output-path "autodoc"})
+  :codox {:output-path "autodoc"}
+
+  :deploy-repositories [["clojars" {:url "https://clojars.org/repo"
+                                    :username :env/clojars_user
+                                    :password :env/clojars_pass
+                                    :sign-releases false}]])
