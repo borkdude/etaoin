@@ -87,7 +87,7 @@
 
         resp (client/request params)
         body (:body resp)
-        body (parse-string body)
+        body (parse-json body)
         error (delay {:type :etaoin/http-error
                       :status (:status resp)
                       :driver @driver
