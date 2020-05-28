@@ -2,7 +2,7 @@
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log]
             [clj-http.lite.client :as client]
-            [cheshire.core :refer [parse-string]]
+            [cheshire.core :as cheshire :refer [parse-string]]
             [slingshot.slingshot :refer [throw+]]))
 
 ;;
@@ -24,12 +24,10 @@
 (def timeout (read-timeout))
 
 (def default-api-params
-  {:as :json
-   :accept :json
+  {:accept :json
    :content-type :json
    :socket-timeout (* 1000 timeout)
    :conn-timeout (* 1000 timeout)
-   :form-params {}
    :debug false})
 
 ;;
@@ -77,9 +75,8 @@
         params (merge default-api-params
                       {:url url
                        :method method
-                       :form-params (-> payload (or {}))
+                       :body (cheshire/generate-string (-> payload (or {})))
                        :throw-exceptions false})
-
         _ (log/debugf "%s %s:%s %6s %s %s"
                       (-> @driver :type name)
                       (-> @driver :host)
@@ -90,6 +87,7 @@
 
         resp (client/request params)
         body (:body resp)
+        body (parse-string body)
         error (delay {:type :etaoin/http-error
                       :status (:status resp)
                       :driver @driver
