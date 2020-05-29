@@ -75,7 +75,10 @@
         params (merge default-api-params
                       {:url url
                        :method method
-                       :body (cheshire/generate-string (-> payload (or {})))
+                       :body
+                       ;; when using get, :body must be absent in clj-http-lite
+                       (when-not (identical? method :get)
+                         (cheshire/generate-string (-> payload (or {}))))
                        :throw-exceptions false})
         _ (log/debugf "%s %s:%s %6s %s %s"
                       (-> @driver :type name)
@@ -84,7 +87,6 @@
                       (-> method name str/upper-case)
                       path
                       (-> payload (or "")))
-
         resp (client/request params)
         body (:body resp)
         body (parse-json body)
