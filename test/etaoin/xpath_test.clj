@@ -12,6 +12,8 @@
 
    [{:fn/has-text "download"} ".//*[contains(text(), \"download\")]"]
 
+   [{:fn/has-string "download"} ".//*[contains(string(), \"download\")]"]
+
    [{:tag :div :fn/has-class "overlay"} ".//div[contains(@class, \"overlay\")]"]
 
    [{:fn/has-classes [:active :sticky :marked]}
@@ -21,6 +23,7 @@
 
    [{:tag :input :fn/enabled false} ".//input[@enabled=false()]"]
 
+   [{:tag :a :fn/link "yandex"} ".//a[contains(@href, \"yandex\")]"]
    ])
 
 (deftest test-xpath-expand

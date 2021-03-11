@@ -1,10 +1,6 @@
 (ns etaoin.driver
   "Some utilities to work with driver's data structure.
 
-  Note: the functions below take not an atom but pure map
-  to be used with swap!. Our further goal is to reduce atom usage
-  everywhere it is possible.
-
   Links for development:
 
   Firefox command line flags:
@@ -28,15 +24,19 @@
   Safari endpoints
   https://developer.apple.com/library/content/documentation/NetworkingInternetWeb/Conceptual/WebDriverEndpointDoc/Commands/Commands.html
 
+  Edge capabilities and endpoints
+  https://docs.microsoft.com/en-us/microsoft-edge/webdriver
+
   JSON Wire protocol (obsolete)
   https://github.com/SeleniumHQ/selenium/wiki/JsonWireProtocol
 
   Selenium Python source code for Firefox
   https://github.com/SeleniumHQ/selenium/blob/master/py/selenium/webdriver/firefox/options.py
-"
+  "
   (:require [etaoin.util :refer [defmethods deep-merge]]
             [clojure.string :as string]
-            [clojure.tools.logging :as log]))
+            [clojure.tools.logging :as log])
+  (:import (java.io File)))
 
 (defn dispatch-driver
   [driver & _]
@@ -120,7 +120,12 @@
 (defmethod options-name
   :safari
   [driver]
-  :safariOptions) ;; todo check
+  :safariOptions)
+
+(defmethod options-name
+  :edge
+  [driver]
+  :edgeOptions)
 
 (defmethod options-name
   :opera
@@ -150,10 +155,15 @@
   :chrome
   ;; Chrome adds the trailing `/Default` part to the profile path.
   ;; To prevent duplication, let's clear the given path manually.
-  [driver profile]
-  (let [default #"(\\|/)Default$"
-        p (string/replace profile default "")]
-    (set-options-args driver [(format "--user-data-dir=%s" p)])))
+  [driver ^String profile]
+  (let [profile       (File. profile)
+        ^File profile (if (= "Default" (.getName profile))
+                        (.getParent profile)
+                        profile)
+        user-data-dir (str (.getParent profile))
+        profile-dir   (str  (.getName profile))]
+    (set-options-args driver [(format "--user-data-dir=%s" user-data-dir)
+                              (format "--profile-directory=%s" profile-dir)])))
 
 (defmethod set-profile
   :firefox
@@ -165,9 +175,9 @@
   (-> driver
       (set-options-args ["-profile" profile])
       ((fn [driver]
-          (if (some #(= "--marionette-port" %) (get-args driver))
-            driver
-            (set-args driver ["--marionette-port" 2828]))))))
+         (if (some #(= "--marionette-port" %) (get-args driver))
+           driver
+           (set-args driver ["--marionette-port" 2828]))))))
 
 ;;
 ;; window size
@@ -232,7 +242,7 @@
   driver)
 
 (defmethods set-headless
-  [:chrome :firefox]
+  [:edge :chrome :firefox]
   [driver]
   (-> driver
       (assoc :headless true)
@@ -245,12 +255,38 @@
 (defmethod is-headless?
   :default
   [driver]
-  (:headless driver))
+  (if-let [args (get-in driver [:capabilities (options-name driver) :args])]
+    (contains? (set args) "--headless")
+    (:headless driver)))
 
 (defmethod is-headless?
   :phantom
   [driver]
   true)
+
+;;
+;; HTTP proxy
+;;
+
+(defn proxy->w3c
+  [proxy]
+  (let [{:keys [http ssl ftp socks pac-url bypass]} proxy]
+    (cond-> nil
+      (or ssl http
+          ftp socks) (assoc :proxyType "manual")
+      pac-url        (assoc :proxyType "pac"
+                            :proxyAutoconfigUrl pac-url)
+      http           (assoc :httpProxy http)
+      ssl            (assoc :sslProxy ssl)
+      ftp            (assoc :ftpProxy ftp)
+      socks          (assoc :socksProxy (:host socks)
+                            :socksVersion (or (:version socks) 5))
+      bypass         (assoc :noProxy bypass))))
+
+(defn set-proxy
+  [driver proxy]
+  (let [proxy-w3c (proxy->w3c proxy)]
+    (set-capabilities driver {:proxy proxy-w3c})))
 
 ;;
 ;; Custom preferences
@@ -299,11 +335,11 @@
 (defmethod set-download-dir
   :chrome
   [driver path]
-  (set-prefs driver {:download.default_directory (add-trailing-slash path)
+  (set-prefs driver {:download.default_directory   (add-trailing-slash path)
                      :download.prompt_for_download false}))
 
 (def ^{:private true
-       :doc "A set of content types that should be downloaded without asking a user."}
+       :doc     "A set of content types that should be downloaded without asking a user."}
   ff-content-types
   #{"application/gzip"
     "application/json"
@@ -340,8 +376,8 @@
 (defmethod set-download-dir
   :firefox
   [driver path]
-  (set-prefs driver {:browser.download.dir path
-                     :browser.download.folderList 2
+  (set-prefs driver {:browser.download.dir            path
+                     :browser.download.folderList     2
                      :browser.download.useDownloadDir true
                      :browser.helperApps.neverAsk.saveToDisk
                      (string/join ";" ff-content-types)}))
@@ -370,8 +406,8 @@
   [level]
   (case level
     (nil
-     :off
-     :none)     "OFF"
+      :off
+      :none)    "OFF"
     :debug      "DEBUG"
     :info       "INFO"
     (:warn
@@ -409,18 +445,42 @@
   [:browser :devtools :devtools.timeline]
   "
   [driver & [{:keys [level network? page? categories interval]
-              :or    {level      :all
-                      network?   true
-                      page?      false
-                      categories [:devtools.network]
-                      interval   1000}}]]
+              :or   {level      :all
+                     network?   true
+                     page?      false
+                     categories [:devtools.network]
+                     interval   1000}}]]
   (update driver :capabilities
           (fn [capabilities]
             (-> capabilities
                 (assoc-in [:loggingPrefs :performance]
                           (remap-log-level level))
                 (assoc-in [(options-name driver) :perfLoggingPrefs]
-                          {:enableNetwork network?
-                           :enablePage page?
-                           :traceCategories (string/join "," (map name categories))
+                          {:enableNetwork                network?
+                           :enablePage                   page?
+                           :traceCategories              (string/join "," (map name categories))
                            :bufferUsageReportingInterval interval})))))
+
+(defmulti set-driver-log-level
+  dispatch-driver)
+
+(defmethod set-driver-log-level
+  :default
+  [driver _]
+  (log/debugf "For this driver, the log level setting is not implemented.")
+  driver)
+
+(defmethod set-driver-log-level
+  :chrome
+  [driver log-level]
+  (set-args driver [(format "--log-level=%s" log-level)]))
+
+(defmethod set-driver-log-level
+  :firefox
+  [driver log-level]
+  (set-args driver ["--log" log-level]))
+
+(defmethod set-driver-log-level
+  :phantom
+  [driver log-level]
+  (set-args driver [(format "--webdriver-loglevel=%s" log-level)]))

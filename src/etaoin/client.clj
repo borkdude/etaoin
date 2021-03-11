@@ -1,8 +1,8 @@
 (ns etaoin.client
-  (:require [clojure.string :as str]
-            [clojure.tools.logging :as log]
+  (:require [cheshire.core :as cheshire :refer [parse-string]]
             [clj-http.lite.client :as client]
-            [cheshire.core :as cheshire :refer [parse-string]]
+            [clojure.string :as str]
+            [clojure.tools.logging :as log]
             [slingshot.slingshot :refer [throw+]]))
 
 ;;
@@ -28,6 +28,7 @@
    :content-type :json
    :socket-timeout (* 1000 timeout)
    :conn-timeout (* 1000 timeout)
+   :form-params  {}
    :debug false})
 
 ;;
@@ -37,9 +38,9 @@
 (defn- url-item-str [item]
   (cond
     (keyword? item) (name item)
-    (symbol? item) (name item)
-    (string? item) item
-    :else (str item)))
+    (symbol? item)  (name item)
+    (string? item)  item
+    :else           (str item)))
 
 (defn- get-url-path [items]
   (str/join "/" (map url-item-str items)))
@@ -67,12 +68,12 @@
 ;;
 
 (defn call
-  [driver method path-args payload]
-  (let [host (:host @driver)
-        port (:port @driver)
-        path (get-url-path path-args)
-        url (format "http://%s:%s/%s" host port path)
+  [{driver-type :type :keys [host port] :as driver}
+   method path-args payload]
+  (let [path   (get-url-path path-args)
+        url    (format "http://%s:%s/%s" host port path)
         params (merge default-api-params
+
                       {:url url
                        :method method
                        :body
@@ -81,9 +82,9 @@
                          (cheshire/generate-string (-> payload (or {}))))
                        :throw-exceptions false})
         _ (log/debugf "%s %s:%s %6s %s %s"
-                      (-> @driver :type name)
-                      (-> @driver :host)
-                      (-> @driver :port)
+                      (name driver-type)
+                      host
+                      port
                       (-> method name str/upper-case)
                       path
                       (-> payload (or "")))
@@ -92,13 +93,13 @@
         body (parse-json body)
         error (delay {:type :etaoin/http-error
                       :status (:status resp)
-                      :driver @driver
+                      :driver driver
                       :response (error-response body)
-                      :host host
-                      :port port
-                      :method method
-                      :path path
-                      :payload payload})]
+                      :host     host
+                      :port     port
+                      :method   method
+                      :path     path
+                      :payload  payload})]
     (cond
       (-> resp :status (not= 200))
       (throw+ @error)

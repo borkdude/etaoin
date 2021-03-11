@@ -57,6 +57,10 @@
   [[_ text]]
   (node-contains "text()" text))
 
+(defmethod clause :fn/has-string
+  [[_ text]]
+  (node-contains "string()" text))
+
 (defmethod clause :fn/has-class
   [[_ class]]
   (node-contains "@class" class))
@@ -64,8 +68,8 @@
 (defmethod clause :fn/has-classes
   [[_ classes]]
   (node-join
-   (for [class classes]
-     (node-contains "@class" class))))
+    (for [class classes]
+      (node-contains "@class" class))))
 
 (defmethod clause :fn/disabled
   [[_ bool]]
@@ -81,15 +85,19 @@
     (node-index idx)
     ""))
 
+(defmethod clause :fn/link
+  [[_ text]]
+  (node-contains "@href" text))
+
 (defn pop-map
   [m k]
   [(get m k) (dissoc m k)])
 
 (defn expand
   [q]
-  (let [[tag q] (pop-map q :tag)
-        tag (or tag :*)
-        idx-key :index
+  (let [[tag q]   (pop-map q :tag)
+        tag       (or tag :*)
+        idx-key   :index
         [index q] (pop-map q idx-key)
-        nodes (concat (into [] q) {idx-key index})]
+        nodes     (concat (into [] q) {idx-key index})]
     (node-join (concat [".//" (to-str tag)] (map clause nodes)))))

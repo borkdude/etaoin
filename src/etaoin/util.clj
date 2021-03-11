@@ -1,4 +1,9 @@
-(ns etaoin.util)
+(ns etaoin.util
+  (:import java.io.File
+           java.nio.file.attribute.FileAttribute
+           java.nio.file.Files
+           org.apache.commons.io.FileUtils))
+
 
 (defn map-or-nil?
   [x]
@@ -35,12 +40,46 @@
   ([tpl & args]
    (error (apply format tpl args))))
 
-(defn random-port
-  "Returns a random port skiping the first 1024 ones."
-  []
-  (let [max-port 65536
-        offset 1024]
-    (-> max-port
-        (- offset)
-        (rand-int)
-        (+ offset))))
+(defn get-free-port []
+  (let [socket (java.net.ServerSocket. 0)]
+    (.close socket)
+    (.getLocalPort socket)))
+
+(defn connectable?
+  "Checks whether it's possible to connect a given host/port pair."
+  [host port]
+  (when-let [^java.net.Socket socket
+             (try
+               (java.net.Socket. ^String host ^int port)
+               (catch java.io.IOException _))]
+    (when (.isConnected socket)
+      (.close socket)
+      true)))
+
+(defn exit
+  [code template & args]
+  (let [out (if (zero? code)
+              *out*
+              *err*)]
+    (binding [*out* out]
+      (println (apply format
+                      template args))))
+  (System/exit code))
+
+(defmacro with-tmp-file [prefix suffix bind & body]
+  `(let [tmp#  (File/createTempFile ~prefix ~suffix)
+         ~bind (.getAbsolutePath tmp#)]
+     (try
+       ~@body
+       (finally
+         (.delete tmp#)))))
+
+(defmacro with-tmp-dir [prefix bind & body]
+  `(let [tmp#  (str (Files/createTempDirectory
+                      ~prefix
+                      (into-array FileAttribute [])))
+         ~bind tmp#]
+     (try
+       ~@body
+       (finally
+         (FileUtils/deleteDirectory (File. tmp#))))))

@@ -1,7 +1,7 @@
 [url-webdriver]: https://www.w3.org/TR/webdriver/
 [url-wiki]: https://en.wikipedia.org/wiki/Etaoin_shrdlu#Literature
 [url-tests]: https://github.com/igrishaev/etaoin/blob/master/test/etaoin/api_test.clj
-[url-doc]: http://grishaev.me/etaoin/
+[url-doc]: http://etaoin.grishaev.me/
 [url-slack]: https://clojurians.slack.com/messages/C7KDM0EKW/
 
 # Etaoin
@@ -15,6 +15,33 @@ actions or whatever you want.
 It's named after [Etaoin Shrdlu][url-wiki] -- a typing machine that became alive
 after a mysteries note was produced on it.
 
+## Release Notes
+
+### Atom turns into a map
+
+Since `0.4.0`, the driver instance is **a map but not an atom** like
+it used to be. It was a difficult solution to decide on, yet we've got rid of
+atom to follow Clojure way in our code. Generally speaking, you never deref a
+driver or store something inside it. All the internal functions that used to
+modify the instance now just return a new version of a map. If you have `swap!`
+or something similar in your code for the driver, please refactor your code
+before you update.
+
+[actions]: https://www.w3.org/TR/webdriver/#actions
+
+### Actions
+
+Since `0.4.0`, the library supports [Webdriver
+Actions][actions]. Actions are commands sent to the driver in batch. See the
+detailed related section in ToC.
+
+### Selenium IDE support
+
+[ide]: https://www.selenium.dev/selenium-ide/
+
+Since `0.4.0`, Etaoin can play script files created in the interactive
+[Selenium IDE][ide]. See the related section below.
+
 # Table of Contents
 
 <!-- toc -->
@@ -24,19 +51,28 @@ after a mysteries note was produced on it.
 - [Who uses it?](#who-uses-it)
 - [Documentation](#documentation)
 - [Installation](#installation)
-- [Getting stated](#getting-stated)
+  * [Installing the etaoin library](#installing-the-etaoin-library)
+  * [Installing the Browser Drivers](#installing-the-browser-drivers)
+- [Getting started](#getting-started)
 - [Querying elements](#querying-elements)
   * [Simple queries, XPath, CSS](#simple-queries-xpath-css)
   * [Map syntax for querying](#map-syntax-for-querying)
   * [Vector syntax for querying](#vector-syntax-for-querying)
   * [Advanced queries](#advanced-queries)
     + [Querying the *nth* element matched](#querying-the-nth-element-matched)
+    + [Getting elements like in a tree](#getting-elements-like-in-a-tree)
   * [Interacting with queried elements](#interacting-with-queried-elements)
+- [Emulation of human input](#emulation-of-human-input)
 - [Mouse clicks](#mouse-clicks)
+- [Actions](#actions)
 - [File uploading](#file-uploading)
 - [Screenshots](#screenshots)
   * [Screening elements](#screening-elements)
+  * [Screening after each form](#screening-after-each-form)
 - [Using headless drivers](#using-headless-drivers)
+- [Connection to remote webdriver](#connection-to-remote-webdriver)
+- [Webdriver in Docker](#webdriver-in-docker)
+- [HTTP Proxy](#http-proxy)
 - [Devtools: tracking HTTP requests, XHR (Ajax)](#devtools-tracking-http-requests-xhr-ajax)
 - [Postmortem: auto-save artifacts in case of exception](#postmortem-auto-save-artifacts-in-case-of-exception)
 - [Reading browser's logs](#reading-browsers-logs)
@@ -59,12 +95,15 @@ after a mysteries note was produced on it.
   * [Postmortem Handler To Collect Artifacts](#postmortem-handler-to-collect-artifacts)
   * [Running Tests By Tag](#running-tests-by-tag)
   * [Check whether a file has been downloaded](#check-whether-a-file-has-been-downloaded)
-- [Installing Drivers](#installing-drivers)
+- [Running IDE files (new!)](#running-ide-files-new)
+  * [CLI arguments](#cli-arguments)
 - [Troubleshooting](#troubleshooting)
   * [Calling maximize function throws an error](#calling-maximize-function-throws-an-error)
   * [Querying wrong elements with XPath expressions](#querying-wrong-elements-with-xpath-expressions)
   * [Clicking On Non-Visible Element](#clicking-on-non-visible-element)
   * [Unpredictable errors in Chrome when window is not active](#unpredictable-errors-in-chrome-when-window-is-not-active)
+  * [Invalid argument: can't kill an exited process](#invalid-argument-cant-kill-an-exited-process)
+  * [DevToolsActivePort file doesn't exist](#devtoolsactiveport-file-doesnt-exist)
 - [Contributors](#contributors)
 - [Other materials](#other-materials)
 - [License](#license)
@@ -93,6 +132,7 @@ after a mysteries note was produced on it.
 - [Barrick Gold](http://www.barrick.com/)
 - [Doctor Evidence](http://drevidence.com/)
 - [Adzerk](https://adzerk.com/)
+- [Guaranteed Rate](https://www.rate.com/)
 
 You are welcome to submit your company into that list.
 
@@ -104,15 +144,82 @@ You are welcome to submit your company into that list.
 
 ## Installation
 
+There are two steps to installation:
+ 1. Install the library `etaoin` into your clojure code
+ 2. Install the drivers for each browser
+
+### Installing the etaoin library
 Add the following into `:dependencies` vector in your `project.clj` file:
 
 ```
-[etaoin "0.3.6"]
+[etaoin "0.4.1"]
 ```
 
-Works with Clojure 1.7 and above.
+Works with Clojure 1.9 and above.
 
-## Getting stated
+### Installing the Browser Drivers
+
+[url-webdriver]: https://www.w3.org/TR/webdriver/
+[url-tests]: https://github.com/igrishaev/etaoin/blob/master/test/etaoin/api_test.clj
+[url-chromedriver]: https://sites.google.com/a/chromium.org/chromedriver/
+[url-chromedriver-dl]: https://sites.google.com/a/chromium.org/chromedriver/downloads
+[url-geckodriver-dl]: https://github.com/mozilla/geckodriver/releases
+[url-phantom-dl]: http://phantomjs.org/download.html
+[url-webkit]: https://webkit.org/blog/6900/webdriver-support-in-safari-10/
+
+This page provides instructions on how to install drivers you need to automate
+your browser.
+
+Install Chrome and Firefox browsers downloading them from the official
+sites. There won't be a problem on all the platforms.
+
+Install specific drivers you need:
+
+- Google [Chrome driver][url-chromedriver]:
+
+  - `brew cask install chromedriver` for Mac users
+  - or download compiled binaries from the [official site][url-chromedriver-dl].
+  - ensure you have at least `2.28` version installed. `2.27` and below has a
+    bug related to maximizing a window (see [[Troubleshooting]]).
+
+- Geckodriver, a driver for Firefox:
+
+  - `brew install geckodriver` for Mac users
+  - or download it from the official [Mozilla site][url-geckodriver-dl].
+
+- Phantom.js browser:
+
+  - `brew install phantomjs` For Mac users
+  - or download it from the [official site][url-phantom-dl].
+
+- Safari Driver (for Mac only):
+
+  - update your Mac OS to El Captain using App Store;
+  - set up Safari options as the [Webkit page][url-webkit] says (scroll down to
+    "Running the Example in Safari" section).
+
+Now, check your installation launching any of these commands. For each command,
+an endless process with a local HTTP server should start.
+
+```bash
+chromedriver
+geckodriver
+phantomjs --wd
+safaridriver -p 0
+```
+
+You may run tests for this library launching:
+
+```bash
+lein test
+```
+
+You'll see browser windows open and close in series. The tests use a local HTML
+file with a special layout to validate the most of the cases.
+
+See below for the [Troubleshooting section](https://github.com/igrishaev/etaoin#troubleshooting) if you have problems
+
+## Getting started
 
 The good news you may automate your browser directly from the REPL:
 
@@ -130,6 +237,17 @@ The good news you may automate your browser directly from the REPL:
 (fill driver {:tag :input :name :search} "Clojure programming language")
 (fill driver {:tag :input :name :search} k/enter)
 (wait-visible driver {:class :mw-search-results})
+
+;; select an `option` in select-box by visible text
+;; <select id="country">
+;;    <option value="rf">Russia</option>
+;;    <option value="usa">United States</option>
+;;    <option value="uk">United Kingdom</option>
+;;    <option value="fr">France</option>
+;;</select>
+(select driver :country "France")
+(get-element-value driver :country)
+;;=> "fr"
 
 ;; I'm sure the first link is what I was looking for
 (click driver [{:class :mw-search-results} {:class :mw-search-result-heading} {:tag :a}])
@@ -171,6 +289,22 @@ may simplify it using `doto` macros:
 ```
 
 In that case, your code looks like a DSL designed just for such purposes.
+
+You can use `fill-multi` to shorten the code like:
+
+``` clojure
+(fill driver :login "login")
+(fill driver :password "pass")
+(fill driver :textarea "some text")
+```
+
+into
+
+``` clojure
+(fill-multi driver {:login "login"
+                    :password "pass"
+                    :textarea "some text"})
+```
 
 If any exception occurs during a browser session, the external process might
 hang forever until you kill it manually. To prevent it, use `with-<browser>`
@@ -248,6 +382,25 @@ rules are:
 
 Examples:
 
+- find the first `div` tag
+  ```clojure
+  (query driver {:tag :div})
+  ;; expands into .//div
+  ```
+
+- find the n-th `div` tag
+  ```clojure
+  (query driver {:tag :div :index 1})
+  ;; expands into .//div[1]
+  ```
+
+- find the tag `a` with the class attribute equals to `active`
+
+``` clojure
+  (query driver {:tag :a :class "active"})
+  ;; ".//a[@class=\"active\"]"
+```
+
 - find a form by its attributes:
 
   ```clojure
@@ -276,6 +429,13 @@ Examples:
   ;; .//div[contains(@class, "overlay")]
   ```
 
+- find an element that has the following domain in a href:
+
+  ```clojure
+  (query driver {:tag :a :fn/link "google.com"})
+  ;; .//a[contains(@href, "google.com")]
+  ```
+
 - find an element that has the following classes at once:
 
   ```clojure
@@ -283,10 +443,17 @@ Examples:
   ;; .//*[contains(@class, "active")][contains(@class, "sticky")][contains(@class, "marked")]
   ```
 
-- find all the disabled input widgets:
+- find the enabled/disabled input widgets:
 
   ```clojure
+  ;; first input
   (query driver {:tag :input :fn/disabled true})
+  ;; .//input[@disabled=true()]
+  (query driver {:tag :input :fn/enabled true})
+  ;; .//input[@enabled=true()]
+
+  ;; all inputs
+  (query-all driver {:tag :input :fn/disabled true})
   ;; .//input[@disabled=true()]
   ```
 
@@ -355,6 +522,26 @@ Finally it is also possible to obtain the *nth* element directly by using
 Note the use of `click-el` here, as `query-all` returns an element, not a
 selector that can be passed to `click` directly.
 
+#### Getting elements like in a tree
+
+`query-tree` takes selectors and acts like a tree.
+Every next selector queries elements from the previous ones.
+The fist selector relies on find-elements, and the rest ones use find-elements-from
+
+  ```clojure
+  (query-tree driver {:tag :div} {:tag :a})
+  ```
+
+  means
+
+  ```
+  {:tag :div} -> [div1 div2 div3]
+  div1 -> [a1 a2 a3]
+  div2 -> [a4 a5 a6]
+  div3 -> [a7 a8 a9]
+  ```
+  so the result will be [a1 ... a9]
+
 ### Interacting with queried elements
 
 To interact with elements found via a query you have to pass the query result to
@@ -372,6 +559,37 @@ at any time:
 
 (fill-el driver (first elements) "This is a test")
 (fill-el driver (rand-nth elements) "I like tests!")
+```
+
+
+## Emulation of human input
+
+For the purpose of emulating human input, you can use the `fill-human` function.
+The following options are enabled by default:
+
+``` clojure
+{:mistake-prob 0.1 ;; a real number from 0.1 to 0.9, the higher the number, the more typos will be made
+ :pause-max    0.2} ;; max typing delay in seconds
+```
+
+and you can redefine them:
+
+``` clojure
+(fill-human driver q text {:mistake-prob 0.5
+                           :pause-max 1})
+
+;; or just use default opts by omitting them
+(fill-human driver q text)
+```
+
+for multiple input with human emulation, use `fill-human-multi`
+
+``` clojure
+(fill-human-multi driver {:login "login"
+                          :pass "password"
+                          :textarea "some text"}
+                         {:mistake-prob 0.5
+                          :pause-max 1})
 ```
 
 ## Mouse clicks
@@ -420,6 +638,87 @@ element before clicking on them:
 A middle mouse click is useful when opening a link in a new background tab. The
 right click sometimes is used to imitate a context menu in web applications.
 
+## Actions
+
+The library supports [Webdriver Actions][actions]. In general, actions are
+commands describing virtual input devices.
+
+``` clojure
+{:actions [{:type    "key"
+            :id      "some name"
+            :actions [{:type "keyDown" :value cmd}
+                      {:type "keyDown" :value "a"}
+                      {:type "keyUp" :value "a"}
+                      {:type "keyUp" :value cmd}
+                      {:type "pause" :duration 100}]}
+           {:type       "pointer"
+            :id         "UUID or some name"
+            :parameters {:pointerType "mouse"}
+            :actions    [{:type "pointerMove" :origin "pointer" :x 396 :y 323}
+                         ;; double click
+                         {:type "pointerDown" :duration 0 :button 0}
+                         {:type "pointerUp" :duration 0 :button 0}
+                         {:type "pointerDown" :duration 0 :button 0}
+                         {:type "pointerUp" :duration 0 :button 0}]}]}
+```
+
+You can create a map manually and send it to the `perform-actions` method:
+
+``` clojure
+(def keyboard-input {:type    "key"
+                     :id      "some name"
+                     :actions [{:type "keyDown" :value cmd}
+                               {:type "keyDown" :value "a"}
+                               {:type "keyUp" :value "a"}
+                               {:type "keyUp" :value cmd}
+                               {:type "pause" :duration 100}]})
+
+(perform-actions driver keyboard-input)
+```
+
+or use wrappers. First you need to create a virtual input devices, for example:
+
+``` clojure
+(def keyboard (make-key-input))
+```
+
+and then fill it with the necessary actions:
+
+``` clojure
+(-> keyboard
+    (add-key-down keys/shift-left)
+    (add-key-down "a")
+    (add-key-up "a")
+    (add-key-up keys/shift-left))
+```
+
+extended example:
+
+``` clojure
+(let [driver       (chrome)
+      _            (go driver "https://google.com")
+      search-box   (query driver {:name :q})
+      mouse        (-> (make-mouse-input)
+                       (add-pointer-click-el search-box))
+      keyboard     (-> (make-key-input)
+                       add-pause
+                       (with-key-down keys/shift-left
+                         (add-key-press "e"))
+                       (add-key-press "t")
+                       (add-key-press "a")
+                       (add-key-press "o")
+                       (add-key-press "i")
+                       (add-key-press "n")
+                       (add-key-press keys/enter))]
+  (perform-actions driver keyboard mouse)
+  (quit driver))
+```
+
+To clear the state of virtual input devices, release all pressed keys etc, use the `release-actions` method:
+
+``` clojure
+(release-actions driver)
+```
 
 ## File uploading
 
@@ -477,6 +776,28 @@ now. Example:
 
 ```clojure
 (screenshot-element driver {:tag :div :class :smart-widget} "smart_widget.png")
+```
+
+### Screening after each form
+
+With macro `with-screenshots`, you can make a screenshot after each form
+
+``` clojure
+(with-screenshots driver "../screenshots"
+  (fill driver :simple-input "1")
+  (fill driver :simple-input "2")
+  (fill driver :simple-input "3"))
+```
+
+what is equivalent to a record:
+
+``` clojure
+(fill driver :simple-input "1")
+(screenshot driver "../screenshots/chrome-...123.png")
+(fill driver :simple-input "2")
+(screenshot driver "../screenshots/chrome-...124.png")
+(fill driver :simple-input "3")
+(screenshot driver "../screenshots/chrome-...125.png")
 ```
 
 ## Using headless drivers
@@ -541,6 +862,80 @@ respectively:
   (when-not-headless driver
     ... some actions that might be not available in headless mode)
   ... common actions for both versions)
+```
+
+## Connection to remote webdriver
+
+To connect to a driver already running on a local or remote host, you must specify the `:host` parameter
+which might be either a hostname (localhost, some.remote.host.net) or an IP address (127.0.0.1, 183.102.156.31) and the `:port`.
+If the port is not specified, the default port is set.
+
+Example:
+
+```clojure
+;; Chrome
+(def driver (chrome {:host "127.0.0.1" :port 9515})) ;; for connection to driver on localhost on port 9515
+
+;; Firefox
+(def driver (firefox {:host "192.168.1.11"})) ;; the default port for firefox is 4444
+```
+
+## Webdriver in Docker
+
+To work with the driver in Docker, you can take ready-made images:
+
+Example for [Chrome](https://hub.docker.com/r/robcherry/docker-chromedriver/):
+
+```
+docker run --name chromedriver -p 9515:4444 -d -e CHROMEDRIVER_WHITELISTED_IPS='' robcherry/docker-chromedriver:latest
+```
+
+for [Firefox](https://hub.docker.com/r/instrumentisto/geckodriver):
+
+```
+docker run --name geckodriver -p 4444:4444 -d instrumentisto/geckodriver
+```
+
+To connect to the driver you just need to specify the `:host` parameter as `localhost` or `127.0.0.1` and the `:port` on which it is running.
+If the port is not specified, the default port is set.
+
+``` clojure
+(def driver (chrome-headless {:host "localhost" :port 9515 :args ["--no-sandbox"]}))
+(def driver (firefox-headless {:host "localhost"})) ;; will try to connect to port 4444
+```
+
+## HTTP Proxy
+
+To set proxy settings use environment variables `HTTP_PROXY`/`HTTPS_PROXY` or pass a map of the following type:
+
+``` clojure
+{:proxy {:http "some.proxy.com:8080"
+         :ftp "some.proxy.com:8080"
+         :ssl "some.proxy.com:8080"
+         :socks {:host "myproxy:1080" :version 5}
+         :bypass ["http://this.url" "http://that.url"]
+         :pac-url "localhost:8888"}}
+
+;; example
+(chrome {:proxy {:http "some.proxy.com:8080"
+                 :ssl "some.proxy.com:8080"}})
+```
+Note: A :pac-url for a [proxy autoconfiguration file](https://en.wikipedia.org/wiki/Proxy_auto-config#The_PAC_File).
+Used with Safari as the other proxy options do not work in that browser.
+
+To fine tune the proxy you can use the original [object](https://www.w3.org/TR/webdriver/#proxy) and pass it to capabilities:
+
+``` clojure
+{:capabilities {:proxy {:proxyType "manual"
+                        :proxyAutoconfigUrl "some.proxy.com:8080"
+                        :ftpProxy "some.proxy.com:8080"
+                        :httpProxy "some.proxy.com:8080"
+                        :noProxy ["http://this.url" "http://that.url"]
+                        :sslProxy "some.proxy.com:8080"
+                        :socksProxy "some.proxy.com:1080"
+                        :socksVersion 5}}}
+
+(chrome {:capabilities {:proxy {...}}})
 ```
 
 ## Devtools: tracking HTTP requests, XHR (Ajax)
@@ -741,7 +1136,8 @@ The handler takes a map of options with the following keys. All of them might be
 absent.
 
 ```clojure
-{;; default directory where to store artifacts; pwd is used when not passed
+{;; default directory where to store artifacts
+ ;; might not exist, will be created otherwise. pwd is used when not passed
  :dir "/home/ivan/UI-tests"
 
  ;; a directory where to store screenshots; :dir is used when not passed
@@ -816,10 +1212,22 @@ skipped or have nil values. Some of them, if not passed, are taken from the
  ;; :all is set.
  :log-level :err ;; to show only errors but not debug
 
+ ;; Sets driver's log level.
+ ;; The value is a string. Possible values are:
+ ;; chrome: [ALL, DEBUG, INFO, WARNING, SEVERE, OFF]
+ ;; phantomjs: [ERROR, WARN, INFO, DEBUG] (default INFO)
+ ;; firefox [fatal, error, warn, info, config, debug, trace]
+ :driver-log-level
+
+ ;; Paths to the driver's log files as strings.
+ ;; When not set, the output goes to /dev/null (or NUL on Windows)
+ :log-stdout
+ :log-stderr
+
  ;; Path to a custorm browser profile. See the section below.
  :profile "/Users/ivan/Library/Application Support/Firefox/Profiles/iy4iitbg.Test"
 
- ;; Env variables sent to the driver's process. Not processed yet.
+ ;; Env variables sent to the driver's process.
  :env {:MOZ_CRASHREPORTER_URL "http://test.com"}
 
  ;; Initial window size.
@@ -1222,6 +1630,39 @@ The final form would be something like this:
     ...etc))
 ```
 
+In addition to `with-wait` and `do-wait` there are a number of waiting functions:
+`wait-visible`, `wait-has-alert`, `wait-predicate`, etc (see the full list in the
+[corresponsing section](http://etaoin.grishaev.me/etaoin.api.html#var-wait)). They
+accept default timeout/interval values that can be redefined using the
+`with-wait-timeout` and `with-wait-interval` macros, respectively.
+
+Example from etaoin test:
+``` clojure
+(deftest test-wait-has-text
+  (testing "wait for text simple"
+    (with-wait-timeout 15 ;; time in seconds
+      (doto *driver*
+        (refresh)
+        (wait-visible {:id :document-end})
+        (click {:id :wait-button})
+        (wait-has-text :wait-span "-secret-"))
+      (is true "text found"))))
+```
+
+Wait text:
+
+- `wait-has-text` waits until an element has text anywhere inside it (including inner HTML).
+
+  ``` clojure
+  (wait-has-text driver :wait-span "-secret-")
+  ```
+
+- `wait-has-text-everywhere` like `wait-has-text` but searches for text across the entire page
+
+  ``` clojure
+  (wait-has-text-everywhere driver "-secret-")
+  ```
+
 ## Writing Integration Tests For Your Application
 
 ### Basic fixture
@@ -1239,9 +1680,7 @@ point to the target driver during the tests.
   (:require [clojure.test :refer :all]
             [etaoin.api :refer :all]))
 
-(def ^:dynamic
-  "Current driver"
-  *driver*)
+(def ^:dynamic *driver*)
 
 (defn fixture-driver
   "Executes a test running a driver. Bounds a driver
@@ -1265,6 +1704,64 @@ point to the target driver during the tests.
     (refresh)
     ...
     ))
+```
+
+If for some reason you want to use a single instance, you can use fixtures like this:
+
+
+```clojure
+(ns project.test.integration
+  "A module for integration tests"
+  (:require [clojure.test :refer :all]
+            [etaoin.api :refer :all]))
+
+(def ^:dynamic *driver*)
+
+(defn fixture-browser [f]
+  (with-chrome-headless {:args ["--no-sandbox"]} driver
+    (disconnect-driver driver)
+    (binding [*driver* driver]
+      (f))
+    (connect-driver driver)))
+
+;; creating a session every time that automatically erases resources
+(defn fixture-clear-browser [f]
+  (connect-driver *driver*)
+  (go *driver* "http://google.com")
+  (f)
+  (disconnect-driver *driver*))
+
+;; this is run `once` before running the tests
+(use-fixtures
+  :once
+  fixture-browser)
+
+;; this is run `every` time before each test
+(use-fixtures
+  :each
+  fixture-clear-browser)
+
+...some tests
+```
+
+For faster testing you can use this example:
+
+```clojure
+.....
+
+(defn fixture-browser [f]
+  (with-chrome-headless {:args ["--no-sandbox"]} driver
+    (binding [*driver* driver]
+      (f))))
+
+;; note that resources, such as cookies, are deleted manually,
+;; so this does not guarantee that the tests are clean
+(defn fixture-clear-browser [f]
+  (delete-cookies *driver*)
+  (go *driver* "http://google.com")
+  (f))
+
+......
 ```
 
 ### Multi-Driver Fixtures
@@ -1402,67 +1899,90 @@ Example:
   (is found (format "No *.xlsx file found in %s directory." DL-DIR)))
 ```
 
-## Installing Drivers
+## Running IDE files (new!)
 
-[url-webdriver]: https://www.w3.org/TR/webdriver/
-[url-tests]: https://github.com/igrishaev/etaoin/blob/master/test/etaoin/api_test.clj
-[url-chromedriver]: https://sites.google.com/a/chromium.org/chromedriver/
-[url-chromedriver-dl]: https://sites.google.com/a/chromium.org/chromedriver/downloads
-[url-geckodriver-dl]: https://github.com/mozilla/geckodriver/releases
-[url-phantom-dl]: http://phantomjs.org/download.html
-[url-webkit]: https://webkit.org/blog/6900/webdriver-support-in-safari-10/
+Etaoin can play the files produced by [Selenium IDE][ide]. It's an official
+utility to create scenarios interactively. The IDE comes as an extension to your
+browser. Once installed, it records you actions into a JSON file with the
+`.side` extension. You can save that file and run it with Etaoin.
 
-This page provides instructions on how to install drivers you need to automate
-your browser.
+Let's imagine you've installed the IDE and recorded some actions as the official
+documentation prescribes. Now that you have a `test.side` file, do this:
 
-Install Chrome and Firefox browsers downloading them from the official
-sites. There won't be a problem on all the platforms.
+```clojure
 
-Install specific drivers you need:
+(require '[etaoin.ide.flow :as flow])
 
-- Google [Chrome driver][url-chromedriver]:
+(def driver (chrome))
 
-  - `brew cask install chromedriver` for Mac users
-  - or download compiled binaries from the [official site][url-chromedriver-dl].
-  - ensure you have at least `2.28` version installed. `2.27` and below has a
-    bug related to maximizing a window (see [[Troubleshooting]]).
+(def ide-file (io/resource "ide/test.side"))
 
-- Geckodriver, a driver for Firefox:
+(def opt
+    {;; The base URL redefines the one from the file.
+     ;; For example, the file was written on the local machine
+     ;; (http://localhost:8080), and we want to perform the scenario
+     ;; on staging (https://preprod-001.company.com)
+     :base-url "https://preprod-001.company.com"
 
-  - `brew install geckodriver` for Mac users
-  - or download it from the official [Mozilla site][url-geckodriver-dl].
+     ;; keywords :test-.. and :suite-.. (id, ids, name, names)
+     ;; are used to select specific tests. When not passed,
+     ;; all tests get run. For example:
 
-- Phantom.js browser:
+     :test-id "xxxx-xxxx..."         ;; a single test by its UUID
+     :test-name "some-test"          ;; a single test by its name
+     :test-ids ["xxxx-xxxx...", ...] ;; multiple tests by their ids
+     :test-names ["some-test1", ...] ;; multiple tests by their names
 
-  - `brew install phantomjs` For Mac users
-  - or download it from the [official site][url-phantom-dl].
+     ;; the same for suites:
 
-- Safari Driver (for Mac only):
+     :suite-id    ...
+     :suite-name  ...
+     :suite-ids   [...]
+     :suite-names [...]})
 
-  - update your Mac OS to El Captain using App Store;
-  - set up Safari options as the [Webkit page][url-webkit] says (scroll down to
-    "Running the Example in Safari" section).
-
-Now, check your installation launching any of these commands. For each command,
-an endless process with a local HTTP server should start.
-
-```bash
-chromedriver
-geckodriver
-phantomjs --wd
-safaridriver -p 0
+(flow/run-ide-script driver ide-file opt)
 ```
 
-You may run tests for this library launching:
+Everything related to the IDE is stored under the `etaoin.ide` package.
 
-```bash
-lein test
+### CLI arguments
+
+You may also run a script from the command line. Here is the `lein run` example:
+
+```shell
+lein run -m etaoin.ide.main -d firefox -p '{:port 8888 :args ["--no-sandbox"]}' -r ide/test.side
 ```
 
-You'll see browser windows open and close in series. The tests use a local HTML
-file with a special layout to validate the most of the cases.
+As well as from an uberjar. In this case, Etaoin must be in the primary
+dependencies, not the `:dev` or `:test` related.
 
-This page holds common troubles you might face during webdriver automation.
+```shell
+java -cp .../poject.jar -m etaoin.ide.main -d firefox -p '{:port 8888}' -f ide/test.side
+```
+
+We support the following arguments (check them out using the `lein run -m
+etaoin.ide.main -h` command):
+
+```
+  -d, --driver-name name   :chrome  The name of driver. The default is `:chrome`
+  -p, --params params      {}       Parameters for the driver represented as an
+                                    EDN string, e.g '{:port 8080}'
+  -f, --file path                   Path to an IDE file on disk
+  -r, --resource path               Path to an IDE resource
+      --test-ids ids                Comma-separeted test ID(s)
+      --suite-ids ids               Comma-separeted suite ID(s)
+      --test-names names            Comma-separeted test name(s)
+      --suite-names names           Comma-separeted suite name(s)
+      --base-url url                Base URL for tests
+  -h, --help
+```
+
+Pay attention to the `--params` one. This must be an EDN string representing a
+Clojure map. That's the same map that you pass into a driver when initiate it.
+
+Please note the IDE support is still experimental. If you encounter unexpected
+behavior feel free to open an issue. At the moment, we only support Chrome and
+Firefox for IDE files.
 
 ## Troubleshooting
 
@@ -1534,9 +2054,48 @@ Google Chrome fails.
 time. When the page is suspended, no operation could be done on it. No clicks,
 Js execution, etc. So try to keep Chrome window active during test session.
 
+### Invalid argument: can't kill an exited process
+
+**Problem:** When you try to start the driver you get an error:
+
+```clojure
+user=> (use 'etaoin.api)
+user=> (def driver (firefox {:headless true}))
+```
+> Syntax error (ExceptionInfo) compiling at (REPL:1:13).
+throw+: {:response {:value {:error "unknown error", :message "invalid argument: can't kill an exited process"....
+
+Possible cause: "Running Firefox as root in a regular user's session is not supported"
+
+**Solution:** To check, run the driver with the path to the log files and the "trace" log level and explore their output.
+
+``` clojure
+(def driver (firefox {:log-stdout "ffout.log" :log-stderr "fferr.log" :driver-log-level "trace"}))
+```
+
+Similar problem: https://github.com/mozilla/geckodriver/issues/1655
+
+### DevToolsActivePort file doesn't exist
+
+**Problem:** When you try to start the chromedriver you get an error:
+
+>clojure.lang.ExceptionInfo: throw+: {:response {:sessionId ".....", :status 13, :value {:message "unknown error: Chrome failed to start: exited abnormally.\n  (unknown error: DevToolsActivePort file doesn't exist)...
+
+Possible cause:
+> A common cause for Chrome to crash during startup is running Chrome as root user (administrator) on Linux. While it is possible to work around this issue by passing --no-sandbox flag when creating your WebDriver session, such a configuration is unsupported and highly discouraged. You need to configure your environment to run Chrome as a regular user instead.
+
+**Solution:** Run driver with an argument `--no-sandbox`. Caution! This is a bypass OS security model.
+
+``` clojure
+(def driver (chrome {:args ["--no-sandbox"]}))
+```
+
+A similar problem is described [here](https://stackoverflow.com/questions/50642308/webdriverexception-unknown-error-devtoolsactiveport-file-doesnt-exist-while-t)
+
 ## Contributors
 
 - [Ivan Grishaev](https://github.com/igrishaev)
+- [Alexey Shipilov](https://github.com/Uunnamed)
 - [Adam Frey](https://github.com/AdamFrey)
 - [JW Koelewijn](https://github.com/jwkoelewijn)
 - [Miloslav Nenadál](https://github.com/nenadalm)
@@ -1559,7 +2118,7 @@ console output.
 
 ## License
 
-Copyright © 2017 Ivan Grishaev.
+Copyright © 2017&mdash;2020 Ivan Grishaev.
 
 Distributed under the Eclipse Public License either version 1.0 or (at your
 option) any later version.
