@@ -34,7 +34,9 @@
                     :resource-paths ["env/test/resources"]}
 
              :1.9 {:dependencies [[org.clojure/clojure "1.9.0"]]}}
-  :dependencies [[org.martinklepsch/clj-http-lite "0.4.3"]
+  :dependencies [[org.clojure/clojure "1.10.3"] ;; always use this one for GraalVM
+                 [org.martinklepsch/clj-http-lite "0.4.3"]
+                 [clj-http "3.10.1"]
                  [cheshire "5.9.0"]
                  [org.clojure/tools.cli "1.0.194"]
                  [org.clojure/tools.logging "0.3.1"]

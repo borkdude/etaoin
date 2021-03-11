@@ -4,7 +4,7 @@
   "
   (:require
    [cheshire.core :as json]
-   [clojure.java.io :as io]
+   [clojure.set]
    [clojure.spec.alpha :as s]
    [etaoin.api :refer :all]
    [etaoin.ide.api :refer [run-command-with-log str->var]]

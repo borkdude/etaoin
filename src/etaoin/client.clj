@@ -28,7 +28,6 @@
    :content-type :json
    :socket-timeout (* 1000 timeout)
    :conn-timeout (* 1000 timeout)
-   :form-params  {}
    :debug false})
 
 ;;
@@ -79,7 +78,7 @@
                        :body
                        ;; when using get, :body must be absent in clj-http-lite
                        (when-not (identical? method :get)
-                         (cheshire/generate-string (-> payload (or {}))))
+                         (cheshire/generate-string (or payload {})))
                        :throw-exceptions false})
         _ (log/debugf "%s %s:%s %6s %s %s"
                       (name driver-type)
