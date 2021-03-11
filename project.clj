@@ -1,4 +1,4 @@
-(defproject borkdude/etaoin-graal "0.4.2-SNAPSHOT"
+(defproject borkdude/etaoin-graal "0.4.2-deb92aaa21c59c52521f42c0177bbce9ac10a0e2"
   :description "Pure Clojure Webdriver protocol implementation."
 
   :url "https://github.com/igrishaev/etaoin"
